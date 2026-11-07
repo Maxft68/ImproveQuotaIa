@@ -1,0 +1,75 @@
+ImproveQuotaIa - Third-party licenses
+================================
+
+ImproveQuotaIa itself is Copyright (C) 2026 Maxft68 (https://github.com/Maxft68) and released under the GNU General Public License v3.0 or later
+(GPL-3.0-or-later, see the LICENSE file).
+
+The standalone builds published on the GitHub Releases page (Linux, Windows, macOS) are produced with PyInstaller
+and bundle the third-party components listed below, each distributed under its own license.
+
+
+1. PySide6 / Shiboken6 (Qt for Python) and Qt 6
+-----------------------------------------------
+
+Copyright (C) The Qt Company Ltd. and other contributors.
+
+License: GNU Lesser General Public License, version 3 (LGPLv3)
+  - LGPLv3 text: https://www.gnu.org/licenses/lgpl-3.0.html
+  - GPLv3 text (which the LGPLv3 supplements): https://www.gnu.org/licenses/gpl-3.0.html
+
+ImproveQuotaIa uses PySide6 >= 6.6, < 6.12 without any modification. In the standalone builds, the Qt and PySide6
+shared libraries (.so / .dll / .dylib files and Python extension modules) are shipped as separate files inside the
+application folder, so you may replace them with another compatible build, modified or not.
+
+Source code:
+  - Qt for Python (PySide6, Shiboken6): https://download.qt.io/official_releases/QtForPython/
+                                        https://code.qt.io/cgit/pyside/pyside-setup.git/
+  - Qt 6:                               https://download.qt.io/official_releases/qt/
+
+Qt itself includes third-party code under other licenses, listed at:
+https://doc.qt.io/qt-6/licenses-used-in-qt.html
+
+
+2. psutil
+---------
+
+BSD 3-Clause License
+
+Copyright (c) 2009, Jay Loden, Dave Daeschler, Giampaolo Rodola
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification,
+are permitted provided that the following conditions are met:
+
+ * Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+ * Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+ * Neither the name of the psutil authors nor the names of its contributors
+   may be used to endorse or promote products derived from this software without
+   specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
+ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
+ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+3. Python
+---------
+
+The standalone builds embed the CPython interpreter and its standard library.
+
+Copyright (c) 2001 Python Software Foundation; All Rights Reserved.
+
+License: Python Software Foundation License Version 2. The full license text, and the licenses of the software
+incorporated in Python, are available at: https://docs.python.org/3/license.html

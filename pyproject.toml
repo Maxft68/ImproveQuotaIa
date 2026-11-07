@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "improvequotaia"
+version = "0.1.0"
+description = "Live pace advice for AI coding quotas (Claude Code, Antigravity, Codex, Grok, Copilot, Gemini CLI, GLM) + CPU/GPU/RAM, with a click-through HUD. Linux, macOS, Windows."
+readme = "README.md"
+license = { text = "GPL-3.0-or-later" }
+authors = [{ name = "Maxft68" }]
+requires-python = ">=3.9"
+# PySide6 6.12.0 plante (erreur de bus dans Qt, reproduite le 2026-11-07) : bloqué en attendant un correctif.
+dependencies = ["PySide6>=6.6,<6.12", "psutil>=5.9"]
+keywords = ["claude", "codex", "gemini", "grok", "copilot", "glm", "quota", "rate-limit", "usage", "monitor", "hud", "tray"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Environment :: X11 Applications :: Qt",
+    "Topic :: System :: Monitoring",
+]
+
+[project.urls]
+Homepage = "https://github.com/Maxft68/ImproveQuotaIa"
+Issues = "https://github.com/Maxft68/ImproveQuotaIa/issues"
+Author = "https://github.com/Maxft68"
+Funding = "https://ko-fi.com/Maxft68"
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[project.gui-scripts]
+improvequotaia = "improvequotaia.app:main"
+
+[project.scripts]
+improvequotaia-statusline = "improvequotaia.statusline:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,65 @@
+name: Release
+
+# Pousser un tag « v0.1.0 » fabrique les exécutables des trois systèmes et les attache à la release.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04      # glibc plus ancienne : fonctionne sur davantage de distributions
+            target: linux-x86_64
+          - os: windows-latest
+            target: windows-x86_64
+          - os: macos-latest
+            target: macos-arm64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Qt system libraries (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libxkbcommon-x11-0 libxcb-cursor0 libdbus-1-3 libfontconfig1
+      - name: Install
+        run: python -m pip install . "pyinstaller>=6.10"
+      - name: Build
+        working-directory: packaging
+        run: pyinstaller improvequotaia.spec --distpath ../dist --workpath ../build -y
+      - name: Archive (Linux)
+        if: runner.os == 'Linux'
+        run: tar czf ImproveQuotaIa-${{ matrix.target }}.tar.gz -C dist ImproveQuotaIa
+      - name: Archive (Windows)
+        if: runner.os == 'Windows'
+        run: Compress-Archive -Path dist/ImproveQuotaIa -DestinationPath ImproveQuotaIa-${{ matrix.target }}.zip
+      - name: Archive (macOS)
+        if: runner.os == 'macOS'
+        run: ditto -c -k --keepParent dist/ImproveQuotaIa.app ImproveQuotaIa-${{ matrix.target }}.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ImproveQuotaIa-${{ matrix.target }}
+          path: ImproveQuotaIa-${{ matrix.target }}.*
+
+  publish:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: ImproveQuotaIa-*
+          generate_release_notes: true
