@@ -58,7 +58,7 @@ class SettingsDialog(QDialog):
             head.setAlignment(Qt.AlignCenter)
             grid.addWidget(head, 0, col)
         sections = (
-            (t("section.system"), SYS_ITEMS, False),
+            (t("section.system"), SYS_ITEMS, True),
             (t("settings.quotas"), self.ctrl.all_groups(), True),
             (t("settings.windows"), (("5h", t("win.5h_long")), ("7d", t("win.7d_long")),
                                      ("1d", t("win.1d_long")), ("1mo", t("win.1mo_long"))), True),

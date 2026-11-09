@@ -168,8 +168,6 @@ class Controller(QObject):
         """Groupes connus + groupes vus dans les données (pour le tableau « Affichage »)."""
         seen, out = set(), []
         for p in self.providers:
-            if not self.enabled(p.id):
-                continue
             candidates = list(p.groups) + [(b.group, b.group_label) for b in self.states[p.id].buckets]
             for gid, label in candidates:
                 if gid not in seen:
@@ -267,6 +265,26 @@ class Controller(QObject):
                 if wins:
                     label = next(b.group_label for b in st.buckets if b.group == gid)
                     groups.append({"id": gid, "label": label, "wins": wins})
+        m = self.sysm
+        for item, label in SYS_ITEMS:
+            if not is_shown(self.config, "tray", item):
+                continue
+            if item == "cpu":
+                temp = f" · {m['cpu_temp']:.0f} °C" if m.get("cpu_temp") else ""
+                pct = f"{m['cpu'] * 100:.0f}%"
+                groups.append({"id": "cpu", "label": label, "sys": pct, "info": f"CPU : {pct}{temp}", "wins": []})
+            elif item == "ram":
+                pct = f"{m['ram'] * 100:.0f}%"
+                detail = f"{m['ram_used'] / 2**30:.1f} / {m['ram_total'] / 2**30:.1f} {t('unit.gb')}"
+                groups.append({"id": "ram", "label": label, "sys": pct, "info": f"RAM : {pct} ({detail})", "wins": []})
+            elif item == "gpu" and m["gpu_available"] and m.get("gpu") is not None:
+                pct = f"{m['gpu'] * 100:.0f}%"
+                temp = f" · {m['gpu_temp']:.0f} °C" if m.get("gpu_temp") is not None else ""
+                groups.append({"id": "gpu", "label": label, "sys": pct, "info": f"GPU : {pct}{temp}", "wins": []})
+            elif item == "vram" and m.get("vram") is not None:
+                pct = f"{m['vram'] * 100:.0f}%"
+                detail = f"{m['vram_used'] / 1024:.1f} / {m['vram_total'] / 1024:.1f} {t('unit.gb')}"
+                groups.append({"id": "vram", "label": label, "sys": pct, "info": f"VRAM : {pct} ({detail})", "wins": []})
         return groups
 
     def tick(self, read_system: bool = True):

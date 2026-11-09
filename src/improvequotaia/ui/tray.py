@@ -35,6 +35,9 @@ def label_text(groups) -> str:
     """Ex. « Claude 5h↓ 7j↑ · Gemini 5h↑ 7j↑ · Argon 7j↓ · AG·Claude 7j✕ »."""
     parts = []
     for g in groups:
+        if g.get("sys"):
+            parts.append(f"{g['label']} {g['sys']}")
+            continue
         tokens = []
         for win, b in g["wins"]:
             short = b.win_label or t(f"winshort.{win}")
@@ -46,6 +49,9 @@ def label_text(groups) -> str:
 def info_lines(groups):
     lines = []
     for g in groups:
+        if g.get("info"):
+            lines.append(g["info"])
+            continue
         for _win, b in g["wins"]:
             v = b.pace.verdict
             detail = pace_detail(b) or (t("tray.back_in", left=fmt_left(b.reset_at)) if b.reset_at else "")
@@ -55,7 +61,8 @@ def info_lines(groups):
 
 
 def main_verdict(groups):
-    return worst(b.pace.verdict for _w, b in groups[0]["wins"]) if groups else None
+    q = next((g for g in groups if g.get("wins")), None)
+    return worst(b.pace.verdict for _w, b in q["wins"]) if q else None
 
 
 # ---------------------------------------------------------------- indicateur avec texte (Linux)
@@ -245,7 +252,8 @@ class Tray(QObject):
             self.last_lines = lines
         text = label_text(groups)
         self.icon.setToolTip(f"{APP_NAME}\n{text}" if text else APP_NAME)
-        verdicts = tuple(b.pace.verdict for _w, b in groups[0]["wins"][:2]) if groups else ()
+        q = next((g for g in groups if g.get("wins")), None)
+        verdicts = tuple(b.pace.verdict for _w, b in q["wins"][:2]) if q else ()
         if verdicts != self.last_icon:
             self.icon.setIcon(QIcon(tray_pixmap(verdicts)) if verdicts else self.ctrl.app_icon)
             self.last_icon = verdicts
