@@ -73,3 +73,44 @@ def test_statusline_writes_cache(tmp_path, monkeypatch, capsys):
     assert saved["rate_limits"]["five_hour"]["used_percentage"] == 12
     assert saved["model"] == "Opus 5.5"
     assert capsys.readouterr().out.strip() == "Opus 5.5 · 5h 12% · 7d 34%"
+
+
+def test_poller_runs_providers_sequentially():
+    import threading
+    import time
+    from improvequotaia.app import Poller
+
+    active = 0
+    max_active = 0
+    order = []
+    done = threading.Event()
+
+    class DummyProvider:
+        interval = 60.0
+
+        def __init__(self, pid):
+            self.id = pid
+
+        def fetch(self):
+            nonlocal active, max_active
+            active += 1
+            max_active = max(max_active, active)
+            time.sleep(0.02)
+            order.append(self.id)
+            active -= 1
+            if len(order) >= 3:
+                done.set()
+            return self.id
+
+    class DummyBridge:
+        class _Sig:
+            def emit(self, *_args):
+                pass
+        result = _Sig()
+
+    providers = [DummyProvider("p1"), DummyProvider("p2"), DummyProvider("p3")]
+    poller = Poller(providers, DummyBridge(), lambda _pid: True)
+    poller.start()
+    assert done.wait(2.0)
+    assert max_active == 1
+    assert order[:3] == ["p1", "p2", "p3"]

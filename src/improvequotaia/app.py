@@ -43,33 +43,64 @@ class Bridge(QObject):
 
 
 class Poller(threading.Thread):
-    def __init__(self, provider, bridge, is_enabled):
+    """Collecte les quotas un outil après l'autre (jamais en parallèle) pour éviter les pics CPU."""
+
+    def __init__(self, providers, bridge, is_enabled):
         super().__init__(daemon=True)
-        self.provider, self.bridge, self.is_enabled = provider, bridge, is_enabled
+        self.providers, self.bridge, self.is_enabled = providers, bridge, is_enabled
         self.wake = threading.Event()
+        self._lock = threading.Lock()
+        self._last_start: dict[str, float] = {}
+
+    def trigger(self, pid: str | None = None):
+        with self._lock:
+            if pid is None:
+                self._last_start.clear()
+            else:
+                self._last_start.pop(pid, None)
+        self.wake.set()
+
+    def _next_wait(self) -> float:
+        now = time.monotonic()
+        wait_s = 10.0
+        enabled_any = False
+        with self._lock:
+            for p in self.providers:
+                if not self.is_enabled(p.id):
+                    continue
+                enabled_any = True
+                last = self._last_start.get(p.id)
+                if last is None:
+                    return 0.0
+                rem = (last + max(1.0, p.interval)) - now
+                if rem <= 0:
+                    return 0.0
+                wait_s = min(wait_s, rem)
+        return wait_s if enabled_any else 2.0
 
     def run(self):
         while True:
-            delay = 2.0
-            if self.is_enabled():
-                start = time.monotonic()
+            self.wake.clear()
+            for p in self.providers:
+                if not self.is_enabled(p.id):
+                    continue
+                now = time.monotonic()
+                with self._lock:
+                    last = self._last_start.get(p.id)
+                    if last is not None and now < last + max(1.0, p.interval):
+                        continue
+                    self._last_start[p.id] = now
                 try:
-                    result, error = self.provider.fetch(), None
+                    result, error = p.fetch(), None
                 except ProviderError as e:
                     result, error = None, e
                 except Exception as e:  # un module défaillant ne doit jamais tuer l'application
                     result, error = None, ProviderError(f"{type(e).__name__}: {e}")
-                self.bridge.result.emit(self.provider.id, result, error)
-                # Attente par tranches de 10 s au plus : l'intervalle peut raccourcir entre-temps
-                # (ex. Antigravity relancé alors qu'on attendait 2 minutes).
-                while True:
-                    remaining = start + max(1.0, self.provider.interval) - time.monotonic()
-                    if remaining <= 0 or self.wake.wait(min(remaining, 10.0)):
-                        break
-                self.wake.clear()
-                continue
-            self.wake.wait(delay)
-            self.wake.clear()
+                self.bridge.result.emit(p.id, result, error)
+
+            wait_s = self._next_wait()
+            if wait_s > 0:
+                self.wake.wait(wait_s)
 
 
 @dataclasses.dataclass
@@ -114,9 +145,8 @@ class Controller(QObject):
         self.settings = None
         self.wizard = None
 
-        self.pollers = {p.id: Poller(p, self.bridge, lambda pid=p.id: self.enabled(pid)) for p in self.providers}
-        for poller in self.pollers.values():
-            poller.start()
+        self.poller = Poller(self.providers, self.bridge, self.enabled)
+        self.poller.start()
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.tick)
         self.timer.start(1000)
@@ -329,7 +359,7 @@ class Controller(QObject):
     def set_provider_enabled(self, pid, on):
         self.config["providers"][pid] = bool(on)
         self.save()
-        self.pollers[pid].wake.set()
+        self.poller.trigger(pid)
         self.tick(read_system=False)
 
     def set_hud(self, on):
@@ -412,8 +442,7 @@ class Controller(QObject):
         self.tick(read_system=False)
 
     def refresh_quotas(self):
-        for poller in self.pollers.values():
-            poller.wake.set()
+        self.poller.trigger()
 
     def quit(self):
         self.system.stop()
