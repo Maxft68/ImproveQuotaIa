@@ -6,12 +6,16 @@ Deux sources, on garde la plus récente :
   2. l'interface OAuth /api/oauth/usage (celle de la commande /usage), au plus toutes les 5 min :
      elle répond 429 si on l'appelle plus souvent. Elle voit aussi l'usage de claude.ai.
 
+Les quotas propres à un modèle (ex. Fable) ne viennent que de l'API : entrées `weekly_scoped` du
+tableau `limits` (et, pour les anciens comptes, `seven_day_opus` / `seven_day_sonnet`).
+
 Identifiants : ~/.claude/.credentials.json (Linux, Windows) ou trousseau macOS.
 Ils ne sont envoyés qu'au serveur d'Anthropic.
 """
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import sys
 import time
@@ -27,6 +31,8 @@ from .base import FIVE_H, WEEK, Bucket, Provider, ProviderError, ProviderResult,
 USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
 API_INTERVAL_S = 300
 GROUP = ("claude-code", "Claude Code")
+SCOPED_WINDOWS = {"session": ("5h", FIVE_H), "weekly": ("7d", WEEK)}
+LEGACY_SCOPED = (("seven_day_opus", "Opus"), ("seven_day_sonnet", "Sonnet"))
 
 
 class RateLimited(ProviderError):
@@ -54,6 +60,64 @@ def read_credentials() -> dict:
     raise ToolMissing(t("err.claude_not_logged"))
 
 
+def _bucket(key, win, window_s, frac, reset_at, tooltip=None, win_label=None):
+    return Bucket(key=key, group=GROUP[0], group_label=GROUP[1], win=win, frac=frac, reset_at=reset_at,
+                  window_s=window_s, disabled=frac is None, note="—" if frac is None else None,
+                  tooltip=tooltip, win_label=win_label)
+
+
+def _scope_label(scope) -> str | None:
+    """Nom affiché d'une limite ciblée : le modèle (ex. « Fable »), sinon la surface."""
+    if not isinstance(scope, dict):
+        return None
+    for part in (scope.get("model"), scope.get("surface")):
+        if isinstance(part, dict) and (part.get("display_name") or part.get("id")):
+            return str(part.get("display_name") or part.get("id"))
+        if isinstance(part, str) and part:
+            return part
+    return None
+
+
+def parse_usage(data: dict):
+    """Réponse de /api/oauth/usage -> (lignes 5 h / 7 j, lignes par modèle). Fonction pure, testée."""
+    def row(key, win, secs):
+        b = data.get(key)
+        if not isinstance(b, dict) or b.get("utilization") is None:
+            return None
+        return _bucket(key, win, secs, b["utilization"] / 100.0, parse_time(b.get("resets_at")),
+                       b.get("locked_reason"))
+
+    main = [row("five_hour", "5h", FIVE_H) or _bucket("five_hour", "5h", FIVE_H, None, None),
+            row("seven_day", "7d", WEEK) or _bucket("seven_day", "7d", WEEK, None, None)]
+
+    shares = {s.get("limit_index"): s.get("allowance_percent_of_weekly")
+              for s in data.get("weekly_scoped_shares") or [] if isinstance(s, dict)}
+    scoped, seen = [], set()
+    limits = data.get("limits") if isinstance(data.get("limits"), list) else []
+    for i, lim in enumerate(limits):
+        if not isinstance(lim, dict) or not lim.get("scope") or lim.get("percent") is None:
+            continue
+        label = _scope_label(lim["scope"])
+        win_secs = SCOPED_WINDOWS.get(lim.get("group"))
+        if not label or not win_secs or (label, win_secs[0]) in seen:
+            continue
+        seen.add((label, win_secs[0]))
+        share = shares.get(i)
+        slug = re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-")
+        scoped.append(_bucket(f"scoped/{lim.get('group')}/{slug}", win_secs[0], win_secs[1],
+                              float(lim["percent"]) / 100.0, parse_time(lim.get("resets_at")),
+                              t("tip.claude_share", pct=f"{share:g}", model=label)
+                              if isinstance(share, (int, float)) else None,
+                              win_label=label))
+    for key, label in LEGACY_SCOPED:
+        b = data.get(key)
+        if (label, "7d") in seen or not isinstance(b, dict) or b.get("utilization") is None:
+            continue
+        scoped.append(_bucket(key, "7d", WEEK, b["utilization"] / 100.0, parse_time(b.get("resets_at")),
+                              b.get("locked_reason"), win_label=label))
+    return main, scoped
+
+
 class ClaudeProvider(Provider):
     id = "claude"
     label = "Claude Code"
@@ -72,13 +136,6 @@ class ClaudeProvider(Provider):
         return (claude_dir() / ".credentials.json").exists() or shutil.which("claude") is not None \
             or claude_statusline_cache().exists()
 
-    # -- construction d'une ligne
-    @staticmethod
-    def _bucket(key, win, window_s, frac, reset_at, tooltip=None):
-        return Bucket(key=key, group=GROUP[0], group_label=GROUP[1], win=win, frac=frac, reset_at=reset_at,
-                      window_s=window_s, disabled=frac is None, note="—" if frac is None else None,
-                      tooltip=tooltip)
-
     def _from_statusline(self):
         try:
             with open(claude_statusline_cache(), encoding="utf-8") as f:
@@ -95,8 +152,8 @@ class ClaudeProvider(Provider):
         for key, win, secs in (("five_hour", "5h", FIVE_H), ("seven_day", "7d", WEEK)):
             b = limits.get(key) or {}
             pct = b.get("used_percentage")
-            buckets.append(self._bucket(key, win, secs, None if pct is None else pct / 100.0,
-                                        parse_time(b.get("resets_at"))))
+            buckets.append(_bucket(key, win, secs, None if pct is None else pct / 100.0,
+                                   parse_time(b.get("resets_at"))))
         return saved_at, buckets
 
     def _from_api(self):
@@ -127,18 +184,9 @@ class ClaudeProvider(Provider):
         except (TimeoutError, ValueError) as e:
             raise ProviderError(t("err.invalid_response", detail=e))
         self.consecutive_429 = 0
-
-        def row(key, win, secs):
-            b = data.get(key)
-            if not isinstance(b, dict) or b.get("utilization") is None:
-                return None
-            return self._bucket(key, win, secs, b["utilization"] / 100.0, parse_time(b.get("resets_at")),
-                                b.get("locked_reason"))
-
-        main = [row("five_hour", "5h", FIVE_H) or self._bucket("five_hour", "5h", FIVE_H, None, None),
-                row("seven_day", "7d", WEEK) or self._bucket("seven_day", "7d", WEEK, None, None)]
-        self.optional = [r for r in (row("seven_day_opus", "Opus 7d", WEEK),
-                                     row("seven_day_sonnet", "Sonnet 7d", WEEK)) if r]
+        if not isinstance(data, dict):
+            raise ProviderError(t("err.invalid_response", detail=type(data).__name__))
+        main, self.optional = parse_usage(data)
         return main
 
     def fetch(self) -> ProviderResult:

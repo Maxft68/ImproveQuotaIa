@@ -103,3 +103,38 @@ def test_antigravity_polls_fast_only_when_in_use(monkeypatch):
     assert provider.interval == antigravity.ACTIVE_INTERVAL == 10.0
     monkeypatch.setattr(antigravity, "agy_in_use", lambda: False)
     assert provider.interval == antigravity.IDLE_INTERVAL == 120.0
+
+
+def test_claude_parse_usage_scoped_model_limits():
+    data = {
+        "five_hour": {"utilization": 1.0, "resets_at": "2026-11-10T16:50:00+00:00"},
+        "seven_day": {"utilization": 12.0, "resets_at": "2026-11-17T07:00:00+00:00"},
+        "seven_day_opus": None,
+        "seven_day_sonnet": {"utilization": 20.0, "resets_at": "2026-11-17T07:00:00+00:00"},
+        "limits": [
+            {"kind": "session", "group": "session", "percent": 1, "scope": None},
+            {"kind": "weekly_all", "group": "weekly", "percent": 12, "scope": None},
+            {"kind": "weekly_scoped", "group": "weekly", "percent": 30, "resets_at": "2026-11-17T07:00:00+00:00",
+             "scope": {"model": {"id": None, "display_name": "Fable"}, "surface": None}},
+            {"kind": "weekly_scoped", "group": "weekly", "percent": 25,
+             "scope": {"model": {"display_name": "Sonnet"}}},
+        ],
+        "weekly_scoped_shares": [{"limit_index": 2, "used_percent_of_weekly": 15, "allowance_percent_of_weekly": 50}],
+    }
+    main, scoped = claude.parse_usage(data)
+    assert [b.win for b in main] == ["5h", "7d"]
+    assert main[1].frac == pytest.approx(0.12)
+    fable, sonnet = scoped  # l'ancien champ seven_day_sonnet ne crée pas de doublon
+    assert (fable.win, fable.win_label, fable.window_s) == ("7d", "Fable", 7 * 86400)
+    assert fable.frac == pytest.approx(0.30) and not fable.disabled
+    assert fable.reset_at == datetime(2026, 11, 17, 7, tzinfo=timezone.utc)
+    assert "50" in fable.tooltip and "Fable" in fable.tooltip
+    assert fable.key == "scoped/weekly/fable" and fable.group == "claude-code"
+    assert sonnet.frac == pytest.approx(0.25) and sonnet.tooltip is None
+
+
+def test_claude_parse_usage_legacy_fields_only():
+    main, scoped = claude.parse_usage({"five_hour": None, "seven_day": None,
+                                       "seven_day_opus": {"utilization": 40.0, "resets_at": None}})
+    assert all(b.disabled for b in main)
+    assert [(b.win, b.win_label, b.frac) for b in scoped] == [("7d", "Opus", pytest.approx(0.4))]

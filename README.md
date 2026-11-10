@@ -63,7 +63,7 @@ Near the end of a window (less than 15 % of the time left), if at least 1.5× mo
 
 | Tool | Windows shown | Source |
 |---|---|---|
-| **Claude Code** (Pro / Max) | 5 h, 7 d (+ Opus / Sonnet when reported) | Claude Code status line (live) + the usage endpoint behind `/usage` (every 5 min) |
+| **Claude Code** (Pro / Max) | 5 h, 7 d (+ per-model quotas such as Fable when reported) | Claude Code status line (live) + the usage endpoint behind `/usage` (every 5 min) |
 | **Antigravity CLI** (Gemini, Argon, Claude / GPT) | 5 h, 7 d | `agy -p /usage --output-format json` (uses no quota) |
 | **Codex CLI** (ChatGPT plans) — *experimental* | 5 h, 7 d | `rate_limits` events in `~/.codex/sessions/**/rollout-*.jsonl` |
 | **Grok Build** (SuperGrok) — *experimental* | weekly pool | token from `grok login` (`~/.grok/auth.json`) + Grok CLI billing endpoint |
