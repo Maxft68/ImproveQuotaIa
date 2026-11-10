@@ -56,7 +56,7 @@ class NvidiaReader(GpuReader):
         while not self.stopped:
             try:
                 self.proc = popen_quiet([self.exe, f"--query-gpu={self.FIELDS}",
-                                         "--format=csv,noheader,nounits", "-l", "1"])
+                                         "--format=csv,noheader,nounits", "-l", "2"])
                 for line in self.proc.stdout:
                     parts = [p.strip() for p in line.split(",")]
                     if len(parts) >= 6:

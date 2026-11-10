@@ -100,9 +100,9 @@ def test_claude_statusline_cache(tmp_path, monkeypatch):
 def test_antigravity_polls_fast_only_when_in_use(monkeypatch):
     provider = antigravity.AntigravityProvider()
     monkeypatch.setattr(antigravity, "agy_in_use", lambda: True)
-    assert provider.interval == antigravity.ACTIVE_INTERVAL == 10.0
+    assert provider.interval == antigravity.ACTIVE_INTERVAL == 30.0
     monkeypatch.setattr(antigravity, "agy_in_use", lambda: False)
-    assert provider.interval == antigravity.IDLE_INTERVAL == 120.0
+    assert provider.interval == antigravity.IDLE_INTERVAL == 180.0
 
 
 def test_claude_parse_usage_scoped_model_limits():

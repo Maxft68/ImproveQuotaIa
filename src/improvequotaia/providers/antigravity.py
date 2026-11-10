@@ -20,8 +20,8 @@ from ..utils import parse_time, run_quiet
 from .base import FIVE_H, WEEK, Bucket, Provider, ProviderError, ProviderResult, ToolMissing
 
 KNOWN = [("ag-gemini", "Gemini"), ("ag-argon", "Argon"), ("ag-3p", "Claude / GPT")]
-# Chaque relevé coûte ~0,6 s de processeur : rapide seulement quand Antigravity est utilisé.
-ACTIVE_INTERVAL, IDLE_INTERVAL = 10.0, 120.0
+# Chaque relevé coûte ~0,6 s de processeur : espacé pour préserver le CPU et la mémoire.
+ACTIVE_INTERVAL, IDLE_INTERVAL = 30.0, 180.0
 AGY_NAMES = {"agy", "agy.exe", "antigravity", "antigravity.exe"}
 
 

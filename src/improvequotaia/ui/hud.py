@@ -42,7 +42,7 @@ class Hud(QWidget):
         self.pointer_timer.start(200)
         self.fullscreen_timer = QTimer(self)
         self.fullscreen_timer.timeout.connect(self.check_fullscreen)
-        self.fullscreen_timer.start(2000)
+        self.fullscreen_timer.start(5000)
 
     # -- dessin du fond arrondi (le contenu est dessiné par les widgets enfants)
     def paintEvent(self, _event):
