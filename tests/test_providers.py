@@ -138,3 +138,70 @@ def test_claude_parse_usage_legacy_fields_only():
                                        "seven_day_opus": {"utilization": 40.0, "resets_at": None}})
     assert all(b.disabled for b in main)
     assert [(b.win, b.win_label, b.frac) for b in scoped] == [("7d", "Opus", pytest.approx(0.4))]
+
+
+def test_claude_from_claude_json(tmp_path, monkeypatch):
+    c_json = tmp_path / ".claude.json"
+    c_json.write_text(json.dumps({
+        "cachedUsageUtilization": {
+            "fetchedAtMs": 1794948886510,
+            "utilization": {
+                "five_hour": {"utilization": 19, "resets_at": "2026-11-18T01:10:00+00:00"},
+                "seven_day": {"utilization": 11, "resets_at": "2026-11-24T07:00:00+00:00"},
+            }
+        }
+    }))
+    monkeypatch.setattr(claude, "claude_json", lambda: c_json)
+    monkeypatch.setattr(claude, "claude_statusline_cache", lambda: tmp_path / "no-cache")
+    monkeypatch.setattr(claude, "claude_dir", lambda: tmp_path / "no-creds")
+    provider = claude.ClaudeProvider()
+    result = provider.fetch()
+    five, week = result.buckets
+    assert (five.win, five.frac) == ("5h", pytest.approx(0.19))
+    assert (week.win, week.frac) == ("7d", pytest.approx(0.11))
+    assert result.source == "Claude Code"
+    assert result.updated_at == pytest.approx(1794948886.51)
+
+
+def test_claude_refresh_credentials_via_http(tmp_path, monkeypatch):
+    creds_file = tmp_path / ".credentials.json"
+    initial_creds = {
+        "claudeAiOauth": {
+            "accessToken": "old-token",
+            "refreshToken": "valid-refresh",
+            "expiresAt": 1000,
+            "scopes": ["user:profile"],
+        }
+    }
+    creds_file.write_text(json.dumps(initial_creds))
+    monkeypatch.setattr(claude, "claude_dir", lambda: tmp_path)
+    monkeypatch.setattr(claude, "_claude_cli_path", lambda: None)
+
+    class DummyResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def read(self):
+            return json.dumps({
+                "access_token": "new-access-token",
+                "refresh_token": "new-refresh-token",
+                "expires_in": 3600,
+            }).encode("utf-8")
+
+    import urllib.request
+    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=15: DummyResponse())
+
+    creds = claude.read_credentials()
+    assert creds["accessToken"] == "old-token"
+    refreshed = claude.refresh_credentials(creds)
+    assert refreshed["accessToken"] == "new-access-token"
+    assert refreshed["refreshToken"] == "new-refresh-token"
+    assert refreshed["expiresAt"] > time.time() * 1000
+
+    # Vérification que le fichier sur disque a aussi été mis à jour
+    on_disk = json.loads(creds_file.read_text())["claudeAiOauth"]
+    assert on_disk["accessToken"] == "new-access-token"
+

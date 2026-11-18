@@ -38,6 +38,10 @@ def claude_dir() -> Path:
     return Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude")
 
 
+def claude_json() -> Path:
+    return Path.home() / ".claude.json"
+
+
 def codex_dir() -> Path:
     return Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
 
